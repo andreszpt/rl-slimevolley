@@ -14,9 +14,6 @@ class Slime:
         elif alg == 'A2C':
             self.model = A2C('MlpPolicy', self.env, verbose=1)
 
-    def create_monitor(self):
-        self.monitor = Monitor(env=self.env, filename='./logs/')
-
     def train(self, t):
         self.model.learn(total_timesteps=t)
 
@@ -38,12 +35,13 @@ class Slime:
             self.env.render()
         
 
-if __name__ == '__main__':
-    slime = Slime('SlimeVolley-v0', 'PPO')
-    slime.load_model('./models/ppo_slime_250k')
-    # slime.train(250_000)
-    # slime.save_model('./models/ppo_slime_250k')
-    slime.simulate()
-
+class SlimeMonitor(Slime):
+    def __init__(self, env, alg):
+        self.env = Monitor(env=gym.make(env), filename='./logs/')
+        self.alg = alg
+        if alg == 'PPO':
+            self.model = PPO('MlpPolicy', self.env, verbose=1)
+        elif alg == 'A2C':
+            self.model = A2C('MlpPolicy', self.env, verbose=1)
     
     
