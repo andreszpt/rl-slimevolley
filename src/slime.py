@@ -1,18 +1,21 @@
 import gym
 from stable_baselines3.common.monitor import Monitor
-from stable_baselines3 import A2C, PPO
+from stable_baselines3 import A2C, PPO, DQN
 import slimevolleygym
 from os.path import isfile
 
 
 class Slime:
-    def __init__(self, env, alg):
-        self.env = gym.make(env)
+    env = gym.make('SlimeVolley-v0')
+
+    def __init__(self, alg):
         self.alg = alg
         if alg == 'PPO':
             self.model = PPO('MlpPolicy', self.env, verbose=1)
         elif alg == 'A2C':
             self.model = A2C('MlpPolicy', self.env, verbose=1)
+        elif alg == 'DQN':
+            self.model = DQN('MlpPolicy', self.env, verbose=1)
 
     def train(self, t):
         self.model.learn(total_timesteps=t)
@@ -36,12 +39,6 @@ class Slime:
         
 
 class SlimeMonitor(Slime):
-    def __init__(self, env, alg):
-        self.env = Monitor(env=gym.make(env), filename='./logs/')
-        self.alg = alg
-        if alg == 'PPO':
-            self.model = PPO('MlpPolicy', self.env, verbose=1)
-        elif alg == 'A2C':
-            self.model = A2C('MlpPolicy', self.env, verbose=1)
+    env = Monitor(env=gym.make('SlimeVolley-v0'), filename='./logs/')
     
     

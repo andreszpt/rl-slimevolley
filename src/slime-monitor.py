@@ -1,7 +1,7 @@
 from slime import Slime, SlimeMonitor
 
 if __name__ == '__main__':
-    slime = SlimeMonitor('SlimeVolley-v0', 'PPO')
-    slime.train(100_000)
+    slime = SlimeMonitor('PPO')
+    slime.train(10_000)
     slime.simulate()
 
