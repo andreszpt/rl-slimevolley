@@ -1,2 +1,2 @@
 # rl-slimevolley
-Aplicación de algoritmos RL al entorno SlimeVolleyGym (https://github.com/hardmaru/slimevolleygym)
+Application of RL algorithms on Slime Voleyball Gym Environment (https://github.com/hardmaru/slimevolleygym)
