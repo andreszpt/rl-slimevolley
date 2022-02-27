@@ -5,17 +5,25 @@ from gym.spaces import Discrete
 
 if __name__ == '__main__':
     alg_list = ['A2C', 'DQN', 'PPO']        # TRPO and QR-DQN belong to SB3 Contrib
-    selected_alg = 'PPO'
-    mode = 'LOAD'
+    mode = input(
+        f'''Please, select one of the following options:
+        "T": Train the agent with one the following set of algorithms: {alg_list}
+        "L": Load an algorithm from the given list and start the simulation
+        (T/L): '''
+        )
+    if (mode == 'L'):
+        selected_alg = input(
+            f'''Select an algorithm from the list: {alg_list}: \n'''
+        )
     timestamps = 20_000
 
-    if mode == 'TRAIN':
+    if mode == 'T':
         for alg in alg_list:
             slime = Slime(alg)
             slime.train(timestamps)
             slime.save_model(f'./models/{alg}_{timestamps//1000}K')
 
-    if mode == 'LOAD':
+    if mode == 'L':
         slime = Slime(selected_alg)
         slime.load_model('./models/PPO_20K')
         slime.simulate()
