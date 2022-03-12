@@ -3,6 +3,7 @@ from stable_baselines3.common.monitor import Monitor
 from stable_baselines3 import A2C, PPO, DQN
 import slimevolleygym
 from os.path import isfile
+import numpy as np
 
 
 class Slime:
@@ -19,6 +20,7 @@ class Slime:
 
     def train(self, t):
         self.model.learn(total_timesteps=t)
+
 
     def save_model(self, path):
         self.model.save(path)
@@ -40,5 +42,18 @@ class Slime:
 
 class SlimeMonitor(Slime):
     env = Monitor(env=gym.make('SlimeVolley-v0'), filename='./logs/')
+
+class SlimeVFA(Slime):
+    def simulate(self, n_samples):
+        obs = self.env.reset()
+        sampled_states = np.empty((n_samples, 12))
+        for i in range(n_samples):
+            action, _state = self.model.predict(obs)
+            obs, reward, done, info = self.env.step(action)
+            if (i%10 == 0):
+                print(f'Sample: {i}')
+            sampled_states[i] = info["state"]
+            self.env.render()
+        return sampled_states
     
     
