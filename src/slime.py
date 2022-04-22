@@ -52,7 +52,3 @@ class Slime:
                 print(f'Sample n = {i}')
             sampled_states[i] = info["state"]
         return sampled_states
-
-
-class SlimeMonitor(Slime):
-    env = Monitor(env=gym.make('SlimeVolley-v0'), filename='./logs/')
