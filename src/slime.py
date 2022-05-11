@@ -1,12 +1,13 @@
 from re import S
 import gym
-from stable_baselines3.common.monitor import Monitor
+from stable_baselines3.common.callbacks import EvalCallback
 from stable_baselines3 import A2C, PPO, DQN
 from baseline import BaselinePolicy
 import slimevolleygym
-from os.path import isfile
+from os.path import isfile, join
 import numpy as np
 
+LOGDIR = join('..', 'logs')
 
 class Slime:
     env = gym.make('SlimeVolley-v0')
@@ -23,7 +24,12 @@ class Slime:
             self.model = BaselinePolicy()
 
     def train(self, t):
-        self.model.learn(total_timesteps=t)
+        eval_callback = EvalCallback(
+            eval_env=self.env,
+            best_model_save_path=LOGDIR,
+            log_path=LOGDIR,
+            eval_freq=1000)
+        self.model.learn(total_timesteps=t, callback=eval_callback)
 
     def save_model(self, path):
         self.model.save(path)
@@ -34,11 +40,13 @@ class Slime:
                 self.model = PPO.load(path)
             elif self.alg == 'A2C':
                 self.model = A2C.load(path)
+            elif self.alg == 'DQN':
+                self.model = DQN.load(path)
 
     def simulate(self):
         obs = self.env.reset()
         while True:
-            action = self.model.predict(obs)
+            action, _states = self.model.predict(obs)
             obs, reward, done, info = self.env.step(action)
             self.env.render()
             

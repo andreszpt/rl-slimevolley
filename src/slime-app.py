@@ -8,8 +8,7 @@ if __name__ == '__main__':
     N_TIMESTEPS = 20_000
     N_SAMPLES = 1_000_000
     DATADIR = join('..', 'data')
-    LOGDIR = join('..', 'logs')
-    MODELDIR = join('..', 'models')
+º   MODELDIR = join('..', 'models')
     UTILDIR = join('..', 'utils')
 
     # TODO: Do not use default N_TIMESTEPS and N_SAMPLES
@@ -27,7 +26,7 @@ if __name__ == '__main__':
             f'''Select an algorithm from the list: {alg_list}: \n'''
         )
         slime = Slime(selected_alg)
-        slime.load_model(join(MODELDIR, 'PPO_20K'))
+        slime.load_model(join(MODELDIR, f'{selected_alg}_20K'))
         slime.simulate()
 
     if mode == 'T':
