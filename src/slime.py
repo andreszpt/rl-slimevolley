@@ -50,13 +50,16 @@ class Slime:
             obs, reward, done, info = self.env.step(action)
             self.env.render()
             
-    def sample_states(self, n_samples):
+    def sample_states(self, n_samples, mode):
         obs = self.env.reset()
         sampled_states = np.empty((n_samples, 12))
         for i in range(n_samples):
-            action = self.model.predict(obs)
+            if (mode == 'RANDOM'):
+                action = self.env.action_space.sample()
+            elif (mode == 'MODEL'):
+                action = self.model.predict(obs)
             obs, reward, done, info = self.env.step(action)
-            if (i % 10 == 0):
+            if (i % 1000 == 0):
                 print(f'Sample n = {i}')
             sampled_states[i] = info["state"]
         return sampled_states

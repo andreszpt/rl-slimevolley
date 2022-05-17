@@ -41,7 +41,7 @@ if __name__ == '__main__':
         
     if mode == 'B2':
         slime = Slime('BSLN')
-        sampled_states = slime.sample_states(N_SAMPLES)
+        sampled_states = slime.sample_states(N_SAMPLES, 'MODEL')
         head = 'x_agent,y_agent,xdot_agent,ydot_agent,' \
             'x_ball,y_ball,xdot_ball,ydot_ball,' \
             'x_opponent,y_opponent,xdot_opponent,ydot_opponent'
@@ -52,4 +52,3 @@ if __name__ == '__main__':
                 header=head,
                 comments='')
         
-    
