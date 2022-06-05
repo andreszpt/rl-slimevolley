@@ -14,12 +14,19 @@ class Featurizer:
         x = np.exp(-dist.sum(axis=1)/(2*self.sigma**2))
         return x
     
-class ValueFunction:
+    
+####################################################################
+#                       SARSA-LAMBDA                               #
+####################################################################
+class ValueFunctionSL:
     def __init__(self, featurizer, n_actions):
         self.n_actions = n_actions
-        n_parameters = featurizer.n_parameters
-        self.parameters = np.zeros((n_actions, n_parameters), dtype=np.float_) 
+        self.n_parameters = featurizer.n_parameters
         self.featurizer = featurizer
+        self.reset()
+        
+    def reset(self):
+        self.parameters = np.zeros((self.n_actions, self.n_parameters), dtype=np.float_) 
         
     # estimar el valor de un estado y una acción dados
     def value(self, observation, action):
@@ -27,10 +34,10 @@ class ValueFunction:
         return features.dot(self.parameters[action,:])
 
     # actualiza con state, action y target
-    def update(self, observation, action, target, alpha):
+    def update(self, observation, action, target, step_size):
         features = self.featurizer.feature_vector(observation)
         estimation = features.dot(self.parameters[action,:])
-        delta = alpha * (target - estimation)*features
+        delta = step_size * (target - estimation)*features
         self.parameters[action,:] = self.parameters[action,:] + delta
         
 def get_action(observation, q_value_function, epsilon = 0.0):
@@ -42,81 +49,182 @@ def get_action(observation, q_value_function, epsilon = 0.0):
         values.append(q_value_function.value(observation, action))
     return np.random.choice([action_ for action_, value_ in enumerate(values) if value_ == np.max(values)])
 
-def semi_gradient_sarsa(env, q, episodes, gamma = 1.0, epsilon = 0.1, epsilon_rate = 0.995, epsilon_min = 0.01,
-                        alpha = 0.1, alpha_rate = 0.995, alpha_min = 0.01):
+class LambdaValueFunction(ValueFunctionSL):
+    def __init__(self, featurizer, n_actions, L):
+        super().__init__(featurizer, n_actions)
+        self.L = L
+        self.initialize_z()
+    
+    def initialize_z(self):
+        self.z = np.zeros((self.n_actions, self.featurizer.n_parameters), dtype=np.float_)
+        
+    def update(self, observation, action, TD_error, alpha, gamma):
+        # actualiza z
+        features = self.featurizer.feature_vector(observation)
+        self.z = gamma*self.L*self.z
+        self.z[action, :] = self.z[action, :] + features
+        
+        # actualiza parametros
+        self.parameters += alpha*TD_error*self.z
+
+def sarsa_lambda(env, q, episodes, t_max, gamma = 1.0, epsilon = 0.1, alpha = 0.1):
+    n_actions = env.action_space.n
     history = np.zeros(episodes)
     history_average = np.zeros(episodes)
+    total_t = 0
     for episode in range(episodes):
-        if (episode+1) % 100 == 0 and episode > 0:
+        if (episode+1) % 2 == 0 and episode > 0:
             mean_G = history_average[episode-1]
             print('episodio {}: alfa = {}, epsilon = {}, retorno medio = {}'.format(episode+1, alpha, epsilon, mean_G))
-        G = 0 # retorno inicial del episodio
-        S = env.reset()
-        A = get_action(S, q, epsilon) # accion dada por epsilon greedy respecto a q
-        for t in count():
-            # if epsilon > epsilon_min:
-            #     epsilon *= epsilon_rate
-            # if alpha > alpha_min:
-            #     alpha *= alpha_rate
-            S_next, reward, done, _ = env.step(A)
-            G += reward
-            A_next = get_action(S_next, q, epsilon)
-            if done:
-                target = reward
-                q.update(S, A, target, alpha)
-                break 
-            target = reward + gamma * q.value(S_next, A_next)
-            q.update(S, A, target, alpha)
-            A = A_next
-            S = S_next        
-        history[episode] = G
-        history_average[episode] = np.mean(history[0:episode+1])        
-    return q, history, history_average
-
-
-def semi_gradient_n_step_sarsa(env, q, episodes, n=1, gamma = 1.0, epsilon = 0.1, alpha = 0.1):
-    history = np.zeros(episodes)
-    history_average = np.zeros(episodes)
-    for episode in range(episodes):
-        if (episode+1) % 100 == 0 and episode > 0:
-            mean_G = history_average[episode-1]
-            print('episodio {}: alfa = {}, epsilon = {}, retorno medio = {}'.format(episode+1, alpha, epsilon, mean_G))
+        if total_t == t_max:
+            break
         G = 0
+        t = 0
         S = env.reset()
         A = get_action(S, q, epsilon)
-        observations, actions, rewards = {}, {}, {}
-        observations[0] = S
-        actions[0] = A
-        rewards[0] = 0.0
-        T = float('inf') 
-        for t in count():
-            if t < T:
-                S_next, R, done, _ = env.step(A)
-                observations[t+1] = S_next
-                rewards[t+1] = R
-                if done:
-                    T = t+1
-                else:
-                    A_next = get_action(S_next, q, epsilon)
-                    actions[t+1] = A_next
-                G += R
-            tau = t - n + 1
-            if tau >= 0:
-                target = 0.0
-                for i in range(tau+1, min(tau+n,T)):
-                    target += gamma**(i-tau-1) * rewards[i]
-                if tau + n < T:
-                    target += gamma**n * q.value(observations[tau + n], actions[tau + n])
-                q.update(observations[tau], actions[tau], target, alpha)
-                del observations[tau]
-                del actions[tau]
-                del rewards[tau]
-            if tau == T-1:
-                break
-            A = A_next       
+        done = False
+        q.initialize_z()
+        while not done:
+            if (total_t+1) % 50 == 0:
+                print('t = {}'.format(total_t+1))
+            # if epsilon > 0.01:
+            #     epsilon *= 0.995
+            # if alpha > 0.01:
+            #     alpha *= 0.995
+            S_next, R, done, _ = env.step(A) # aplicamos la accion            
+            Q = q.value(S,A) # obtenemos Q (lo necesitaremos para calcular TD_error)            
+            if done:
+                Q_next = 0.0
+            else:
+                A_next = get_action(S_next, q, epsilon)
+                Q_next = q.value(S_next, A_next)            
+            TD_error = R + gamma * Q_next - Q
+            q.update(S,A,TD_error,alpha,gamma)           
+            S = S_next
+            A = A_next
+            G += R # actualizamos G para las graficas
+            t += 1 # contador de etapas     
+            total_t += 1
         history[episode] = G
         history_average[episode] = np.mean(history[0:episode+1])        
     return q, history, history_average
+
+
+####################################################################
+#                    REINFORCE CON BASELINE                        #
+####################################################################
+class PolicyEstimator:
+    def __init__(self, featurizer, n_actions):
+        self.n_actions = n_actions
+        n_parameters = featurizer.n_parameters
+        # self.parameters = np.random.rand(n_actions, n_parameters)*0.1
+        self.parameters = np.zeros((n_actions, n_parameters), dtype=np.float_) 
+        self.featurizer = featurizer
+
+    def __getitem__(self, S):
+        return self.get_action(S)
+    
+    # devuelve la función de probabilidad dada una observación
+    def get_pi_distribution(self, observation):
+        features = self.featurizer.feature_vector(observation)
+        h = np.zeros((self.n_actions,), dtype=np.float_)
+        for a in range(self.n_actions):
+            h[a] = features.dot(self.parameters[a,:])
+        pi = np.exp(h) / np.sum(np.exp(h))
+        if np.isnan(pi).any():
+            print('¡Algo salió mal! El algoritmo puede ser divergente. Intenta con un alfa más pequeño')
+        return pi
+        
+    # muestrea una acción usando la función de probabilidad para un estado dado (observation)
+    def get_action(self, observation):
+        pi = self.get_pi_distribution(observation)
+        cdf = np.cumsum(pi)
+        s = np.random.random()
+        action = np.where(s < cdf)[0][0]
+        return action
+
+    # actualiza el vector parámetros dado el estado, la acción y el error
+    def update(self, observation, action, error, alpha, discount = 1.0):
+        features = self.featurizer.feature_vector(observation)
+        pi = self.get_pi_distribution(observation)
+        for a in range(self.n_actions):
+            if a==action:
+                grad_log = features - pi[a]*features
+            else:
+                grad_log = -1.0*pi[a]*features 
+            delta = alpha * discount * error * grad_log
+            self.parameters[a,:] = self.parameters[a,:] + delta
+
+def generate_episode(env, policy, A = -1, max_t = 1000):
+    state_action_seq, rewards = [], []
+    S = env.reset()
+    if A < 0:
+        A = policy[S]
+    state_action_seq.append((S, A))
+    S, reward, done, _ = env.step(A)
+    rewards.append(reward)
+    t = 0
+    while not done and t < max_t:
+        A = policy[S]
+        state_action_seq.append((S, A))
+        S, reward, done, _ = env.step(A)
+        rewards.append(reward)
+        t += 1
+    return state_action_seq, rewards
+
+class ValueFunctionRB():
+    def __init__(self, featurizer):
+        n_parameters = featurizer.n_parameters
+        # self.parameters = np.random.rand(1, n_parameters)*0.1
+        self.parameters = np.zeros((n_parameters,), dtype=np.float_) 
+        self.featurizer = featurizer
+        
+    # estima el valor de un estado dado (observation)
+    def value(self, observation):
+        features = self.featurizer.feature_vector(observation)
+        return features.dot(self.parameters)
+
+    # actualiza el vector de pesos w con el estado (observation) y el error dado
+    def update(self, observation, error, alpha):
+        features = self.featurizer.feature_vector(observation)
+        delta = alpha * error * features
+        self.parameters = self.parameters + delta
+        
+def reinforce_baseline(env, pi, v, episodes, t_max, alpha, beta, gamma=1.0):
+    history = np.zeros(episodes)
+    history_average = np.zeros(episodes)
+    total_t = 0
+    best_parameters = 0
+    for episode in range(episodes):
+        if episode % 2 == 0 and episode > 0:
+            mean_G = history_average[episode-1]
+            print('episodio {}: alpha = {}, beta = {}, retorno medio = {}'.format(episode, alpha, beta, mean_G))
+        if total_t > t_max:
+            break
+        # genera el episodio y almacena los pares estado acción y las recompensas
+        state_action_seq, rewards = generate_episode(env, pi)
+        G = 0
+        for t in range(len(state_action_seq) - 1, -1, -1):
+            if (total_t+1) % 50 == 0:
+                print('t = {}'.format(total_t+1))
+            # if epsilon > 0.01:
+            #     epsilon *= 0.995
+            # if alpha > 0.01:
+            #     alpha *= 0.995
+            R = rewards[t]
+            (S,A) = state_action_seq[t] # extrae el par estado acción
+            G = R + gamma * G # calcula retorno en t
+            I = gamma ** t # variable de descuento
+            error = G - v.value(S) # error de la estimación v en S respecto a G
+            v.update(S, error, beta)  # actualiza v
+            pi.update(S, A, error, alpha, I) # actualiza pi
+            total_t += 1
+        history[episode] = G
+        history_average[episode] = np.mean(history[0:episode+1])
+        if G >= history.max():
+            best_parameters = np.copy(pi.parameters)
+    return pi, history, history_average, best_parameters
+
 
 def plot_history(history, history_average):
     ax = plt.subplot(111)

@@ -8,7 +8,7 @@ if __name__ == '__main__':
     N_TIMESTEPS = 20_000
     N_SAMPLES = 1_000_000
     DATADIR = join('..', 'data')
-º   MODELDIR = join('..', 'models')
+    MODELDIR = join('..', 'models')
     UTILDIR = join('..', 'utils')
 
     # TODO: Do not use default N_TIMESTEPS and N_SAMPLES

@@ -28,7 +28,8 @@ class Slime:
             eval_env=self.env,
             best_model_save_path=LOGDIR,
             log_path=LOGDIR,
-            eval_freq=1000)
+            eval_freq=200_000,
+            n_eval_episodes=1_000)
         self.model.learn(total_timesteps=t, callback=eval_callback)
 
     def save_model(self, path):
