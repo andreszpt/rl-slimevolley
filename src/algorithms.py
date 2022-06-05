@@ -76,7 +76,7 @@ def sarsa_lambda(env, q, episodes, t_max, gamma = 1.0, epsilon = 0.1, alpha = 0.
         if (episode+1) % 2 == 0 and episode > 0:
             mean_G = history_average[episode-1]
             print('episodio {}: alfa = {}, epsilon = {}, retorno medio = {}'.format(episode+1, alpha, epsilon, mean_G))
-        if total_t == t_max:
+        if total_t > t_max:
             break
         G = 0
         t = 0
