@@ -87,10 +87,8 @@ def sarsa_lambda(env, q, episodes, t_max, gamma = 1.0, epsilon = 0.1, alpha = 0.
         while not done:
             if (total_t+1) % 50 == 0:
                 print('t = {}'.format(total_t+1))
-            # if epsilon > 0.01:
-            #     epsilon *= 0.995
-            # if alpha > 0.01:
-            #     alpha *= 0.995
+            epsilon *= 0.99999
+            alpha *= 0.99999
             S_next, R, done, _ = env.step(A) # aplicamos la accion            
             Q = q.value(S,A) # obtenemos Q (lo necesitaremos para calcular TD_error)            
             if done:
@@ -207,10 +205,8 @@ def reinforce_baseline(env, pi, v, episodes, t_max, alpha, beta, gamma=1.0):
         for t in range(len(state_action_seq) - 1, -1, -1):
             if (total_t+1) % 50 == 0:
                 print('t = {}'.format(total_t+1))
-            # if epsilon > 0.01:
-            #     epsilon *= 0.995
-            # if alpha > 0.01:
-            #     alpha *= 0.995
+            alpha *= 0.99999
+            beta *= 0.99999
             R = rewards[t]
             (S,A) = state_action_seq[t] # extrae el par estado acción
             G = R + gamma * G # calcula retorno en t
@@ -224,13 +220,3 @@ def reinforce_baseline(env, pi, v, episodes, t_max, alpha, beta, gamma=1.0):
         if G >= history.max():
             best_parameters = np.copy(pi.parameters)
     return pi, history, history_average, best_parameters
-
-
-def plot_history(history, history_average):
-    ax = plt.subplot(111)
-    plt.plot(history, label="retorno del episodio")
-    plt.plot(history_average, label="retorno medio por episodio")
-    plt.ylabel('Retorno completo', size=10)
-    ax.legend(loc='lower right')
-    plt.grid()
-    plt.show()
