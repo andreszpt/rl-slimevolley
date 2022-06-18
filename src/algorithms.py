@@ -67,17 +67,13 @@ class LambdaValueFunction(ValueFunctionSL):
         # actualiza parametros
         self.parameters += alpha*TD_error*self.z
 
-def sarsa_lambda(env, q, episodes, t_max, gamma = 1.0, epsilon = 0.1, alpha = 0.1):
+def sarsa_lambda(env, q, t_max, gamma = 1.0, epsilon = 0.1, alpha = 0.1):
     n_actions = env.action_space.n
-    history = np.zeros(episodes)
-    history_average = np.zeros(episodes)
+    rewards = np.zeros((0))
+    lengths = np.zeros((0))
     total_t = 0
-    for episode in range(episodes):
-        if (episode+1) % 2 == 0 and episode > 0:
-            mean_G = history_average[episode-1]
-            print('episodio {}: alfa = {}, epsilon = {}, retorno medio = {}'.format(episode+1, alpha, epsilon, mean_G))
-        if total_t > t_max:
-            break
+    episode = 0
+    while total_t < t_max:
         G = 0
         t = 0
         S = env.reset()
@@ -85,8 +81,6 @@ def sarsa_lambda(env, q, episodes, t_max, gamma = 1.0, epsilon = 0.1, alpha = 0.
         done = False
         q.initialize_z()
         while not done:
-            if (total_t+1) % 50 == 0:
-                print('t = {}'.format(total_t+1))
             epsilon *= 0.99999
             alpha *= 0.99999
             S_next, R, done, _ = env.step(A) # aplicamos la accion            
@@ -102,10 +96,12 @@ def sarsa_lambda(env, q, episodes, t_max, gamma = 1.0, epsilon = 0.1, alpha = 0.
             A = A_next
             G += R # actualizamos G para las graficas
             t += 1 # contador de etapas     
-            total_t += 1
-        history[episode] = G
-        history_average[episode] = np.mean(history[0:episode+1])        
-    return q, history, history_average
+        total_t += t
+        episode += 1
+        print('episodio {}: alfa = {}, epsilon = {}, rew_ep = {}, len_ep = {}, total_t = {}'.format(episode, alpha, epsilon, G, t, total_t))
+        rewards = np.append(rewards, G)
+        lengths = np.append(lengths, t)
+    return q, rewards, lengths
 
 
 ####################################################################
@@ -188,25 +184,19 @@ class ValueFunctionRB():
         delta = alpha * error * features
         self.parameters = self.parameters + delta
         
-def reinforce_baseline(env, pi, v, episodes, t_max, alpha, beta, gamma=1.0):
-    history = np.zeros(episodes)
-    history_average = np.zeros(episodes)
+def reinforce_baseline(env, pi, v, t_max, alpha, beta, gamma=1.0):
+    rewards = np.zeros((0))
+    lengths = np.zeros((0))
     total_t = 0
+    episode = 0
     best_parameters = 0
-    for episode in range(episodes):
-        if episode % 2 == 0 and episode > 0:
-            mean_G = history_average[episode-1]
-            print('episodio {}: alpha = {}, beta = {}, retorno medio = {}'.format(episode, alpha, beta, mean_G))
-        if total_t > t_max:
-            break
+    while total_t < t_max:
         # genera el episodio y almacena los pares estado acción y las recompensas
         state_action_seq, rewards = generate_episode(env, pi)
         G = 0
         for t in range(len(state_action_seq) - 1, -1, -1):
-            if (total_t+1) % 50 == 0:
-                print('t = {}'.format(total_t+1))
-            alpha *= 0.99999
-            beta *= 0.99999
+            alpha *= 0.99995
+            beta *= 0.99995
             R = rewards[t]
             (S,A) = state_action_seq[t] # extrae el par estado acción
             G = R + gamma * G # calcula retorno en t
@@ -214,9 +204,11 @@ def reinforce_baseline(env, pi, v, episodes, t_max, alpha, beta, gamma=1.0):
             error = G - v.value(S) # error de la estimación v en S respecto a G
             v.update(S, error, beta)  # actualiza v
             pi.update(S, A, error, alpha, I) # actualiza pi
-            total_t += 1
-        history[episode] = G
-        history_average[episode] = np.mean(history[0:episode+1])
-        if G >= history.max():
+        total_t += len(state_action_seq)
+        episode += 1
+        print('episodio {}: alpha = {}, beta = {}, rew_ep = {}, len_ep = {}, total_t = {} '.format(episode, alpha, beta, G, len(state_action_seq), total_t))
+        rewards = np.append(rewards, G)
+        lengths = np.append(lengths, len(state_action_seq))
+        if G >= rewards.max():
             best_parameters = np.copy(pi.parameters)
-    return pi, history, history_average, best_parameters
+    return pi, rewards, lengths, best_parameters
