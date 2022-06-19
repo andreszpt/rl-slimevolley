@@ -212,3 +212,159 @@ def reinforce_baseline(env, pi, v, t_max, alpha, beta, gamma=1.0):
         if G >= rewards.max():
             best_parameters = np.copy(pi.parameters)
     return pi, rewards, lengths, best_parameters
+
+
+
+
+
+####################################################################
+#                    ACTOR CRITIC + TRAZAS                         #
+####################################################################
+class ValueFunctionAC():
+    def __init__(self, featurizer):
+        n_parameters = featurizer.n_parameters
+        # self.parameters = np.random.rand(1, n_parameters)*0.1
+        self.parameters = np.zeros((n_parameters,), dtype=np.float_) 
+        self.featurizer = featurizer
+        
+    # estima el valor de un estado dado (observation)
+    def value(self, observation):
+        features = self.featurizer.feature_vector(observation)
+        return features.dot(self.parameters)
+
+    # actualiza el vector de pesos w con el estado (observation) y el error dado
+    def update(self, observation, error, alpha):
+        features = self.featurizer.feature_vector(observation)
+        delta = alpha * error * features
+        self.parameters = self.parameters + delta
+
+
+class LambdaValueFunctionAC(ValueFunctionAC):
+    def __init__(self, featurizer, L):
+        super().__init__(featurizer)
+        self.L = L
+        self.initialize_z()
+    
+    def initialize_z(self):
+        self.z = np.zeros((self.featurizer.n_parameters), dtype=np.float_)
+        
+    def update(self, observation, error, alpha, gamma):
+        # actualiza z
+        features = self.featurizer.feature_vector(observation)
+        self.z = gamma*self.L*self.z
+        self.z = self.z + features
+        
+        # actualiza parametros
+        self.parameters += alpha*error*self.z
+        
+class PolicyEstimatorAC:
+    def __init__(self, featurizer, n_actions):
+        self.n_actions = n_actions
+        n_parameters = featurizer.n_parameters
+        # self.parameters = np.random.rand(n_actions, n_parameters)*0.1
+        self.parameters = np.zeros((n_actions, n_parameters), dtype=np.float_) 
+        self.featurizer = featurizer
+
+    def __getitem__(self, S):
+        return self.get_action(S)
+    
+    # devuelve la función de probabilidad dada una observación
+    def get_pi_distribution(self, observation):
+        features = self.featurizer.feature_vector(observation)
+        h = np.zeros((self.n_actions,), dtype=np.float_)
+        for a in range(self.n_actions):
+            h[a] = features.dot(self.parameters[a,:])
+        pi = np.exp(h) / np.sum(np.exp(h))
+        if np.isnan(pi).any():
+            print('¡Algo salió mal! El algoritmo puede ser divergente. Intenta con un alfa más pequeño')
+        return pi
+        
+    # muestrea una acción usando la función de probabilidad para un estado dado (observation)
+    def get_action(self, observation):
+        pi = self.get_pi_distribution(observation)
+        cdf = np.cumsum(pi)
+        s = np.random.random()
+        action = np.where(s < cdf)[0][0]
+        return action
+
+    # actualiza el vector parámetros dado el estado, la acción y el error
+    def update(self, observation, action, error, alpha, discount = 1.0):
+        features = self.featurizer.feature_vector(observation)
+        pi = self.get_pi_distribution(observation)
+        for a in range(self.n_actions):
+            if a==action:
+                grad_log = features - pi[a]*features
+            else:
+                grad_log = -1.0*pi[a]*features 
+            delta = alpha * discount * error * grad_log
+            self.parameters[a,:] = self.parameters[a,:] + delta
+        
+class LambdaPolicyEstimatorAC(PolicyEstimatorAC):
+    def __init__(self, featurizer, n_actions, L):
+        super().__init__(featurizer, n_actions)
+        self.L = L
+        self.initialize_z()
+    
+    def initialize_z(self):
+        self.z = np.zeros((self.n_actions, self.featurizer.n_parameters), dtype=np.float_)
+        
+    def update(self, observation, action, error, alpha, gamma, I):
+        # actualiza z
+        features = self.featurizer.feature_vector(observation)
+        self.z = gamma*self.L*self.z
+        pi = self.get_pi_distribution(observation)
+        for a in range(self.n_actions):
+            if a==action:
+                grad_log = features - pi[a]*features
+            else:
+                grad_log = -1.0*pi[a]*features 
+            self.z[a, :] = self.z[a, :] + I*grad_log
+        
+        # actualiza parametros
+        self.parameters += alpha*error*self.z
+        
+
+def actor_critic_lambda(env, pi, v, t_max, alpha, beta, gamma=1.0, max_t = np.Inf):
+    n_actions = env.action_space.n
+    rewards = np.zeros((0))
+    lengths = np.zeros((0))
+    total_t = 0
+    episode = 0
+    while total_t < t_max:
+        # Resetea el entorno y obtiene el primer estado visitado
+        S = env.reset()    
+        I = 1.0     
+        done = False
+        t = 0
+        G = 0
+        # inicializamos las trazas de elegibilidad
+        pi.initialize_z()
+        v.initialize_z()
+        # Avanzamos una etapa del episodio en cada iteración
+        while not done and t < max_t:
+            A = pi.get_action(S)
+            S_next, R, done, _ = env.step(A)
+            # Calcula el target TD y el error TD
+            if done:
+                v_next = 0.0
+            else:
+                v_next = v.value(S_next)
+            td_error = R + gamma * v_next - v.value(S)
+            # CRITIC: Actualiza el estimador de la función valor, v
+            v.update(S, td_error, beta, gamma)
+            # ACTOR: Actualiza el estimador de la política, pi, usando el error TD
+            pi.update(S, A, td_error, alpha, gamma, I)
+            # Actualiza G, I, S y el contador de etapas t
+            G += I*R
+            I = gamma * I
+            S = S_next
+            t += 1        
+            # ################################################################## #        
+        total_t += t
+        episode += 1
+        print('episodio {}: alpha = {}, beta = {}, rew_ep = {}, len_ep = {}, total_t = {} '.format(episode, alpha, beta, G, t, total_t))
+        rewards = np.append(rewards, G)
+        lengths = np.append(lengths, t)   
+        if G >= rewards.max():
+            best_parameters = np.copy(pi.parameters)
+    return pi, rewards, lengths, best_parameters
