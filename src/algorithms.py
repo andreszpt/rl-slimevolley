@@ -1,17 +1,5 @@
 import numpy as np
 from itertools import count, product
-
-
-class Featurizer:
-    def __init__(self, observation_space, centroids, sigma=0.5):
-        self.n_dim = len(observation_space.low)
-        self.centroids = np.array(centroids)     
-        self.sigma = sigma
-        self.n_parameters = len(self.centroids)
-    def feature_vector(self, s):
-        dist = (self.centroids - np.array(s))**2
-        x = np.exp(-dist.sum(axis=1)/(2*self.sigma**2))
-        return x
     
     
 ####################################################################
@@ -100,7 +88,9 @@ def sarsa_lambda(env, q, t_max, gamma = 1.0, epsilon = 0.1, alpha = 0.1):
         print('episodio {}: alfa = {}, epsilon = {}, rew_ep = {}, len_ep = {}, total_t = {}'.format(episode, alpha, epsilon, G, t, total_t))
         rewards = np.append(rewards, G)
         lengths = np.append(lengths, t)
-    return q, rewards, lengths
+        if G >= rewards.max():
+            best_parameters = np.copy(q.parameters)
+    return q, rewards, lengths, best_parameters
 
 
 ####################################################################
@@ -228,8 +218,8 @@ def actor_critic_lambda(env, pi, v, t_max, alpha, beta, gamma=1.0, max_t = np.In
         v.initialize_z()
         # Avanzamos una etapa del episodio en cada iteración
         while not done and t < max_t:
-            alpha *= 0.99995
-            beta *= 0.99995
+            alpha *= 0.99999
+            beta *= 0.99999
             A = pi.get_action(S)
             S_next, R, done, _ = env.step(A)
             # Calcula el target TD y el error TD
