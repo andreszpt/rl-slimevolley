@@ -19,7 +19,7 @@ ipykernel @ file:///D:/bld/ipykernel_1655369313836/work
 ipython @ file:///D:/bld/ipython_1653755080319/work
 isort==5.7.0
 jedi @ file:///D:/bld/jedi_1649067332918/work
-joblib==1.1.0
+joblib==1.2.0
 jupyter-client @ file:///home/conda/feedstock_root/build_artifacts/jupyter_client_1654730843242/work
 jupyter-core @ file:///D:/bld/jupyter_core_1652365569005/work
 kiwisolver==1.4.3
